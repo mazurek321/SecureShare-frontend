@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const token = req.cookies.get('auth_token')?.value
-    const res = await fetch(`http://localhost:8080/api/files/${id}`, {
-      method: 'DELETE',
+    const res = await fetch(`http://localhost:8080/api/files/${id}/request-access`, {
+      method: 'POST',
       headers: token ? { 'Authorization': `Bearer ${token}` } : {},
     })
     const text = await res.text()

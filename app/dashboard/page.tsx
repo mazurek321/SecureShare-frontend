@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 import SidebarTabs from '../../components/sidebarTabs'
@@ -8,20 +8,13 @@ import FilesTable from '../../components/filesTable'
 import UsersTable from '../../components/usersTable'
 import FileRequestsTable from '../../components/fileRequestTable'
 import DashboardHeader from '../../components/dashboardHeader'
-import { fileService, type FileItem } from '../../src/services/fileService'
+import { fileService, type FileItem, type AccessRequest } from '../../src/services/fileService'
 import { adminService } from '../../src/services/adminService'
-import { authService } from '../../src/services/authService' // DODAJ TEN IMPORT
+import { authService } from '../../src/services/authService'
 
 export type User = {
   username: string
   role: string
-}
-
-export type FileRequest = {
-  id: number | string
-  fileId: number | string
-  fileName: string
-  requestedBy: string
 }
 
 export type UserResponse = {
@@ -29,14 +22,6 @@ export type UserResponse = {
   username: string
   role: string
   email?: string
-}
-
-function getCookie(name: string) {
-  if (typeof window === 'undefined') return null
-  const value = `; ${document.cookie}`
-  const parts = value.split(`; ${name}=`)
-  if (parts.length === 2) return parts.pop()?.split(';').shift()
-  return null
 }
 
 export default function DashboardPage() {
@@ -47,7 +32,7 @@ export default function DashboardPage() {
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   
   const [files, setFiles] = useState<FileItem[]>([])
-  const [requests, setRequests] = useState<FileRequest[]>([])
+  const [requests, setRequests] = useState<AccessRequest[]>([])
   const [usersList, setUsersList] = useState<UserResponse[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -71,13 +56,25 @@ export default function DashboardPage() {
     loadUser()
   }, [])
 
-const isAdmin = user?.role === 'ADMIN'
-
+  const isAdmin = user?.role === 'ADMIN'
 
   useEffect(() => {
     if (!user && activeTab !== 'all') {
       setActiveTab('all')
     }
+  }, [user, activeTab])
+
+  useEffect(() => {
+    async function fetchRequestsOnly() {
+      if (!user) return
+      try {
+        const pendingRequests = await fileService.getPendingRequests()
+        setRequests(pendingRequests)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+    fetchRequestsOnly()
   }, [user, activeTab])
 
   useEffect(() => {
@@ -110,9 +107,6 @@ const isAdmin = user?.role === 'ADMIN'
             break
           }
           case 'requests': {
-            if (!user) return
-            const pendingRequests = await fileService.getPendingRequests()
-            setRequests(pendingRequests)
             break
           }
           case 'users': {
@@ -137,11 +131,18 @@ const isAdmin = user?.role === 'ADMIN'
     loadDashboardData()
   }, [activeTab, selectedUser, user, isAdmin])
 
-  const handleApproveRequest = async (requestId: string | number, fileId: string | number, targetUserId: string | number) => {
+  const handleApproveRequest = async (requestId: string, fileId: string, targetUserId: string) => {
     if (!user) return
     try {
-      await fileService.grantAccess(fileId, targetUserId)
-      setRequests((prev) => prev.filter((r) => r.id !== requestId))
+      let finalUserId = targetUserId
+
+      if (isNaN(Number(finalUserId)) && !finalUserId.includes('-')) {
+        const resolvedUser = await fileService.searchUserByUsername(targetUserId)
+        finalUserId = resolvedUser.id
+      }
+
+      await fileService.grantAccess(fileId, finalUserId)
+      setRequests((prev) => prev.filter((r) => r.id !== requestId && !(r.fileId === fileId && ((r as any).requesterUsername === targetUserId || r.requestedBy === targetUserId))))
     } catch (err: any) {
       setError(err.message || 'Nie udało się zatwierdzić prośby.')
     }
@@ -212,6 +213,7 @@ const isAdmin = user?.role === 'ADMIN'
               isAdmin={isAdmin}
               setAllFiles={setFiles}
               currentUsername={user?.username}
+              pendingRequests={requests}
             />
           ) : null}
         </div>

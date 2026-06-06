@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Trash2, Users, Upload, X, FileUp } from 'lucide-react'
+import { Trash2, Upload, X, FileUp, Download } from 'lucide-react'
 import { fileService } from '../../src/services/fileService'
 import { authService, AuthResponse } from '../../src/services/authService'
 
@@ -16,9 +16,6 @@ type AccessLevel = 'public' | 'request'
 export default function AccountPage() {
   const [user, setUser] = useState<AuthResponse | null>(null)
   const [myFiles, setMyFiles] = useState<FileItem[]>([])
-  const [selectedFile, setSelectedFile] = useState<FileItem | null>(null)
-  const [shareInput, setShareInput] = useState('')
-  const [shareError, setShareError] = useState<string | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   
@@ -26,12 +23,12 @@ export default function AccountPage() {
   const [isPublic, setIsPublic] = useState<boolean>(false)
   
   const [loading, setLoading] = useState(false)
+  const [actionLoadingId, setActionLoadingId] = useState<string | number | null>(null)
   const [pageError, setPageError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
-  // Logika synchronizacji checkboxa z wyborem polityki
   const handleAccessLevelChange = (val: AccessLevel) => {
     setAccessLevel(val)
     setIsPublic(val === 'public')
@@ -104,6 +101,26 @@ export default function AccountPage() {
     }
   }
 
+  const handleDownload = async (file: FileItem) => {
+    setActionLoadingId(file.id)
+    setPageError(null)
+    try {
+      const blob = await fileService.downloadFile(file.id.toString())
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = file.originalFilename || 'file'
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      a.remove()
+    } catch (err: any) {
+      setPageError(err.message || 'Download failed.')
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
   const handleDeleteMyFile = async (id: number | string) => {
     if (!confirm('Are you sure you want to delete this file?')) return
     setPageError(null)
@@ -111,23 +128,8 @@ export default function AccountPage() {
     try {
       await fileService.deleteFile(id.toString())
       setMyFiles((prev) => prev.filter((f) => f.id !== id))
-      if (selectedFile?.id === id) setSelectedFile(null)
     } catch (err: any) {
       setPageError(err.message || 'Delete failed.')
-    }
-  }
-
-  const addPerson = async () => {
-    if (!selectedFile || !shareInput.trim()) return
-    setShareError(null)
-    try {
-      const targetUser = await fileService.searchUserByUsername(shareInput.trim())
-      await fileService.grantAccess(selectedFile.id.toString(), targetUser.id)
-      setShareInput('')
-      setSelectedFile(null)
-      alert('Access granted successfully')
-    } catch (err: any) {
-      setShareError(err.message || 'User not found or access grant failed.')
     }
   }
 
@@ -188,41 +190,32 @@ export default function AccountPage() {
             myFiles.map((f) => (
               <div
                 key={f.id}
-                onClick={() => { setShareError(null); setSelectedFile(f); }}
-                className="flex cursor-pointer items-center justify-between p-6 hover:bg-white/5 transition"
+                className="flex items-center justify-between p-6"
               >
                 <div>
                   <p className="font-semibold text-zinc-100">{f.originalFilename}</p>
-                  <p className="text-xs text-zinc-400 flex items-center gap-1 mt-1">
-                    <Users className="h-3 w-3" /> Click to manage sharing
-                  </p>
                 </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDeleteMyFile(f.id); }}
-                  className="cursor-pointer text-red-400 hover:text-red-300 transition p-1 rounded hover:bg-red-500/10"
-                >
-                  <Trash2 className="h-5 w-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={actionLoadingId !== null}
+                    onClick={() => handleDownload(f)}
+                    className="cursor-pointer text-zinc-300 hover:text-white transition p-2 rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                  <button
+                    disabled={actionLoadingId !== null}
+                    onClick={() => handleDeleteMyFile(f.id)}
+                    className="cursor-pointer text-red-400 hover:text-red-300 transition p-2 rounded hover:bg-red-500/10 disabled:opacity-30"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ))
           )}
         </div>
       </div>
-
-      {selectedFile && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-50" onClick={() => setSelectedFile(null)}>
-          <div className="w-[520px] rounded-2xl border border-white/10 bg-zinc-900/90 backdrop-blur-md p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="mb-2 text-xl font-bold">Grant access to file:</h2>
-            <p className="mb-4 text-sm text-zinc-400 truncate">{selectedFile.originalFilename}</p>
-            {shareError && <div className="mb-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-400 border border-red-500/20">{shareError}</div>}
-            <div className="mb-6 flex gap-2">
-              <input value={shareInput} onChange={(e) => setShareInput(e.target.value)} placeholder="Enter exact username" className="flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2 outline-none focus:border-green-500/50 text-sm" />
-              <button onClick={addPerson} className="cursor-pointer rounded-xl bg-green-500 px-4 py-2 text-black font-semibold hover:bg-green-400 transition text-sm">Grant</button>
-            </div>
-            <button onClick={() => setSelectedFile(null)} className="cursor-pointer w-full rounded-xl bg-zinc-800 py-2 text-white font-semibold hover:bg-zinc-700 transition">Close</button>
-          </div>
-        </div>
-      )}
 
       {uploadOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-50" onClick={() => !loading && setUploadOpen(false)}>

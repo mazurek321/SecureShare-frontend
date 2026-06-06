@@ -2,20 +2,40 @@
 
 import { useState } from 'react'
 import { Download, ShieldAlert, Trash2, User } from 'lucide-react'
-import { fileService, FileItem } from '../src/services/fileService'
+import { fileService, FileItem, AccessRequest } from '../src/services/fileService'
 import { adminService } from '../src/services/adminService'
-
+import AccessRequestModal from './AccessRequestModal'
 
 interface FilesTableProps {
   files: FileItem[]
   isAdmin: boolean
   setAllFiles: React.Dispatch<React.SetStateAction<FileItem[]>>
   currentUsername?: string
+  pendingRequests?: AccessRequest[]
 }
 
-export default function FilesTable({ files = [], isAdmin, setAllFiles, currentUsername }: FilesTableProps) {
+export default function FilesTable({ files = [], isAdmin, setAllFiles, currentUsername, pendingRequests = [] }: FilesTableProps) {
   const [actionLoadingId, setActionLoadingId] = useState<string | number | null>(null)
   const [tableError, setTableError] = useState<string | null>(null)
+
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<{ id: string; name: string; alreadySent: boolean } | null>(null)
+
+  const checkIsAlreadyRequested = (fileId: string) => {
+    const hasPending = pendingRequests.some((req) => String(req.fileId) === String(fileId))
+    if (hasPending) return true
+
+    if (typeof window !== 'undefined') {
+      const cookies = document.cookie.split('; ')
+      const cookie = cookies.find(row => row.startsWith('sent_requests='))
+      if (cookie) {
+        const val = cookie.split('=')[1]
+        const ids = val ? val.split(',') : []
+        return ids.includes(fileId)
+      }
+    }
+    return false
+  }
 
   const handleDownload = async (file: FileItem) => {
     setActionLoadingId(file.id)
@@ -31,7 +51,18 @@ export default function FilesTable({ files = [], isAdmin, setAllFiles, currentUs
       window.URL.revokeObjectURL(url)
       a.remove()
     } catch (err: any) {
-      setTableError(err.message || 'Download failed.')
+      const errMsg = err.message || 'Download failed.'
+      
+      if (errMsg.includes('Brak uprawnień') || errMsg.includes('403') || errMsg.includes('Status: 403')) {
+        setSelectedFile({
+          id: file.id,
+          name: file.name || file.originalFilename,
+          alreadySent: checkIsAlreadyRequested(file.id)
+        })
+        setIsModalOpen(true)
+      } else {
+        setTableError(errMsg)
+      }
     } finally {
       setActionLoadingId(null)
     }
@@ -51,8 +82,7 @@ export default function FilesTable({ files = [], isAdmin, setAllFiles, currentUs
     }
   }
 
-
-    const handleAdminDelete = async (fileId: string) => {
+  const handleAdminDelete = async (fileId: string) => {
     if (!confirm('Are you sure?')) return
     setActionLoadingId(fileId)
     setTableError(null)
@@ -95,7 +125,6 @@ export default function FilesTable({ files = [], isAdmin, setAllFiles, currentUs
               </tr>
             ) : (
               files.map((f) => {
-                console.log(f)
                 const fileOwner = typeof f.owner === 'object' && f.owner !== null 
                   ? (f.owner as any).username 
                   : (f.owner || (f as any).ownerUsername || 'Unknown')
@@ -118,17 +147,16 @@ export default function FilesTable({ files = [], isAdmin, setAllFiles, currentUs
                         <button onClick={() => handleDownload(f)} disabled={actionLoadingId !== null} className="cursor-pointer p-2 rounded-lg bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-30">
                           <Download className="h-4 w-4" />
                         </button>
-                        {(isMyFile) ? (
+                        {isMyFile ? (
                           <button onClick={() => handleDelete(f.id)} disabled={actionLoadingId !== null} className="cursor-pointer p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-30">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         ) :
-                        (isAdmin) && (
-                            <button onClick={() => handleAdminDelete(f.id)} disabled={actionLoadingId !== null} className="cursor-pointer p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-30">
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )
-                        }
+                        isAdmin && (
+                          <button onClick={() => handleAdminDelete(f.id)} disabled={actionLoadingId !== null} className="cursor-pointer p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-30">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -138,6 +166,19 @@ export default function FilesTable({ files = [], isAdmin, setAllFiles, currentUs
           </tbody>
         </table>
       </div>
+
+      {selectedFile && (
+        <AccessRequestModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false)
+            setSelectedFile(null)
+          }}
+          fileId={selectedFile.id}
+          fileName={selectedFile.name}
+          initialAlreadySent={selectedFile.alreadySent}
+        />
+      )}
     </div>
   )
 }

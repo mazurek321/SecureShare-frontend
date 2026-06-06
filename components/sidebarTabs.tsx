@@ -86,7 +86,7 @@ export default function SidebarTabs({
     if (user) {
       tabs.push(
         { id: 'my', label: 'My files' },
-        { id: 'shared', label: 'Shared' },
+        { id: 'shared', label: 'Shared for me' },
         { id: 'requests', label: 'Requests' }
       )
     }
