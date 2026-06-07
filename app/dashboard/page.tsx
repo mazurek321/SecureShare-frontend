@@ -21,7 +21,7 @@ export type UserResponse = {
   id: string
   username: string
   role: string
-  email?: string
+  email: string
 }
 
 export default function DashboardPage() {
@@ -38,25 +38,28 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   const router = useRouter()
+  const isAdmin = user?.role === 'ADMIN'
 
   useEffect(() => {
+    let isMounted = true
     async function loadUser() {
       try {
         const userData = await authService.getMe()
-        setUser({
-          username: userData.username,
-          role: userData.role
-        })
+        if (isMounted) {
+          setUser({
+            username: userData.username,
+            role: userData.role
+          })
+        }
       } catch (err) {
-        setUser(null)
+        if (isMounted) setUser(null)
       } finally {
-        setLoading(false)
+        if (isMounted) setLoading(false)
       }
     }
     loadUser()
+    return () => { isMounted = false }
   }, [])
-
-  const isAdmin = user?.role === 'ADMIN'
 
   useEffect(() => {
     if (!user && activeTab !== 'all') {
@@ -65,71 +68,80 @@ export default function DashboardPage() {
   }, [user, activeTab])
 
   useEffect(() => {
-    async function fetchRequestsOnly() {
-      if (!user) return
-      try {
-        const pendingRequests = await fileService.getPendingRequests()
-        setRequests(pendingRequests)
-      } catch (err) {
-        console.error(err)
-      }
-    }
-    fetchRequestsOnly()
-  }, [user, activeTab])
-
-  useEffect(() => {
+    let isMounted = true
+    
     async function loadDashboardData() {
       setError(null)
       try {
         if (selectedUser) {
           const targetUser = await fileService.searchUserByUsername(selectedUser)
           const userFiles = await fileService.getUserFiles(targetUser.username)
-          setFiles(userFiles)
+          if (isMounted) setFiles(userFiles)
           return
         }
 
         switch (activeTab) {
           case 'all': {
             const publicFiles = await fileService.getPublicFiles()
-            setFiles(publicFiles)
+            if (isMounted) setFiles(publicFiles)
             break
           }
           case 'my': {
             if (!user) return
             const myFiles = await fileService.getMyFiles()
-            setFiles(myFiles)
+            if (isMounted) setFiles(myFiles)
             break
           }
           case 'shared': {
             if (!user) return
             const sharedFiles = await fileService.getSharedWithMe()
-            setFiles(sharedFiles)
+            if (isMounted) setFiles(sharedFiles)
             break
           }
           case 'requests': {
+            if (!user) return
+            const pendingRequests = await fileService.getPendingRequests()
+            if (isMounted) setRequests(pendingRequests)
             break
           }
           case 'users': {
             if (isAdmin) {
               const users = await adminService.getUsers()
               const mappedUsers = users.map((u: any) => ({
-                ...u,
+                id: u.id,
+                username: u.username,
+                role: u.role,
                 email: u.email || ''
               }))
-              setUsersList(mappedUsers)
+              if (isMounted) setUsersList(mappedUsers)
             }
             break
           }
-          default:
-            break
         }
       } catch (err: any) {
-        setError(err.message || 'Wystąpił błąd podczas pobierania danych z serwera.')
+        if (isMounted) {
+          setError(err.message || 'Wystąpił błąd podczas pobierania danych z serwera.')
+        }
       }
     }
 
-    loadDashboardData()
-  }, [activeTab, selectedUser, user, isAdmin])
+    async function fetchRequestsInBackground() {
+      if (!user || activeTab === 'requests' || activeTab === 'users') return
+      try {
+        const pendingRequests = await fileService.getPendingRequests()
+        if (isMounted) setRequests(pendingRequests)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+
+    if (!loading) {
+      loadDashboardData()
+      fetchRequestsInBackground()
+    }
+
+    return () => { isMounted = false }
+  }, [activeTab, selectedUser, user, isAdmin, loading])
 
   const handleApproveRequest = async (requestId: string, fileId: string, targetUserId: string) => {
     if (!user) return
@@ -142,7 +154,13 @@ export default function DashboardPage() {
       }
 
       await fileService.grantAccess(fileId, finalUserId)
-      setRequests((prev) => prev.filter((r) => r.id !== requestId && !(r.fileId === fileId && ((r as any).requesterUsername === targetUserId || r.requestedBy === targetUserId))))
+      
+      setRequests((prev) => 
+        prev.filter((r) => 
+          r.id !== requestId && 
+          !(r.fileId === fileId && ((r as any).requesterUsername === targetUserId || r.requestedBy === targetUserId))
+        )
+      )
     } catch (err: any) {
       setError(err.message || 'Nie udało się zatwierdzić prośby.')
     }
@@ -150,35 +168,37 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-900 text-zinc-400 p-8 flex items-center justify-center">
-        Weryfikacja sesji użytkownika...
+      <div className="min-h-screen bg-zinc-900 text-zinc-200 p-8 flex items-center justify-center">
+        <div className="animate-pulse font-medium">Weryfikacja sesji użytkownika...</div>
       </div>
     )
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950/50 text-white relative overflow-hidden">
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-emerald-500/20 blur-3xl" />
-        <div className="absolute top-1/3 -right-40 h-[28rem] w-[28rem] rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 h-96 w-96 rounded-full bg-lime-500/10 blur-3xl" />
+    <main className="min-h-screen text-zinc-100 relative overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-700 via-zinc-800 to-zinc-900">
+      
+      <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none hidden xl:block">
+        <div className="absolute -top-32 left-[calc(50%-45rem)] h-[35rem] w-[35rem] rounded-full bg-emerald-400/15 blur-[120px]" />
+        <div className="absolute top-1/4 right-[calc(50%-48rem)] h-[40rem] w-[40rem] rounded-full bg-cyan-400/15 blur-[120px]" />
+        <div className="absolute bottom-[-10rem] left-[calc(50%-40rem)] h-[35rem] w-[35rem] rounded-full bg-lime-400/10 blur-[120px]" />
       </div>
 
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute inset-0 -z-10 bg-zinc-950/40 backdrop-blur-[4px]" />
 
       <div className="relative mx-auto max-w-6xl px-6 py-10">
         
         {error && (
-          <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400 backdrop-blur-md">
-            {error}
+          <div className="mb-6 rounded-2xl border-2 border-red-500 bg-red-950/90 backdrop-blur-[80px] p-4 text-sm text-red-200 flex justify-between items-center shadow-[0_20px_50px_rgba(0,0,0,0.4)]">
+            <span className="font-bold">{error}</span>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-white ml-2 transition">✕</button>
           </div>
         )}
 
-        <div className="mb-10 rounded-2xl border border-white/10 bg-zinc-900/70 backdrop-blur-md p-6 shadow-lg shadow-black/30">
+        <div className="mb-6 rounded-2xl border border-zinc-500/30 bg-zinc-900/75 backdrop-blur-[80px] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] text-zinc-100">
           <DashboardHeader user={user} setUser={setUser} router={router} />
         </div>
 
-        <div className="mb-8 rounded-2xl border border-white/10 bg-zinc-900/70 backdrop-blur-md p-6 shadow-lg shadow-black/30">
+        <div className="mb-6 rounded-2xl border border-zinc-500/30 bg-zinc-900/75 backdrop-blur-[80px] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] text-zinc-100">
           <SidebarTabs
             activeTab={activeTab}
             setActiveTab={(tab) => {
@@ -194,20 +214,20 @@ export default function DashboardPage() {
           />
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/70 backdrop-blur-md p-6 shadow-lg shadow-black/30">
-          {activeTab === 'users' && isAdmin ? (
-            <UsersTable usersList={usersList as any} setUsersList={setUsersList as any} />
-          ) : null}
+        <div className="rounded-2xl border border-zinc-500/30 bg-zinc-900/75 backdrop-blur-[80px] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] text-zinc-100">
+          {activeTab === 'users' && isAdmin && (
+            <UsersTable usersList={usersList} setUsersList={setUsersList} />
+          )}
 
-          {activeTab === 'requests' && user ? (
+          {activeTab === 'requests' && user && (
             <FileRequestsTable
               requests={requests}
               setRequests={setRequests}
               onApprove={handleApproveRequest}
             />
-          ) : null}
+          )}
 
-          {activeTab !== 'users' && activeTab !== 'requests' ? (
+          {activeTab !== 'users' && activeTab !== 'requests' && (
             <FilesTable
               files={files}
               isAdmin={isAdmin}
@@ -215,7 +235,7 @@ export default function DashboardPage() {
               currentUsername={user?.username}
               pendingRequests={requests}
             />
-          ) : null}
+          )}
         </div>
       </div>
     </main>

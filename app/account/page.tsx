@@ -57,7 +57,12 @@ export default function AccountPage() {
       const files = await fileService.getMyFiles()
       setMyFiles(Array.isArray(files) ? files : [])
     } catch (err: any) {
-      setPageError(err.message || 'Failed to fetch files.')
+      const rawError = err.message || ''
+      if (rawError.toLowerCase().includes('fetch failed')) {
+        setPageError('Connection failed. Please check your internet connection or try again later.')
+      } else {
+        setPageError(rawError || 'Failed to fetch files.')
+      }
     }
   }
 
@@ -95,7 +100,12 @@ export default function AccountPage() {
       
       await fetchMyFiles()
     } catch (err: any) {
-      setPageError(err.message || 'Upload failed.')
+      const rawError = err.message || ''
+      if (rawError.toLowerCase().includes('fetch failed')) {
+        setPageError('Connection failed. Unable to upload file. Please try again later.')
+      } else {
+        setPageError(rawError || 'Upload failed.')
+      }
     } finally {
       setLoading(false)
     }
@@ -115,7 +125,12 @@ export default function AccountPage() {
       window.URL.revokeObjectURL(url)
       a.remove()
     } catch (err: any) {
-      setPageError(err.message || 'Download failed.')
+      const rawError = err.message || ''
+      if (rawError.toLowerCase().includes('fetch failed')) {
+        setPageError('Connection failed. Unable to download file.')
+      } else {
+        setPageError(rawError || 'Download failed.')
+      }
     } finally {
       setActionLoadingId(null)
     }
@@ -129,84 +144,98 @@ export default function AccountPage() {
       await fileService.deleteFile(id.toString())
       setMyFiles((prev) => prev.filter((f) => f.id !== id))
     } catch (err: any) {
-      setPageError(err.message || 'Delete failed.')
+      const rawError = err.message || ''
+      if (rawError.toLowerCase().includes('fetch failed')) {
+        setPageError('Connection failed. Unable to delete file.')
+      } else {
+        setPageError(rawError || 'Delete failed.')
+      }
     }
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-zinc-900 text-zinc-400 p-8 flex items-center justify-center">
-        Weryfikacja sesji konta...
+      <div className="min-h-screen bg-zinc-900 text-zinc-200 p-8 flex items-center justify-center">
+        <div className="animate-pulse font-medium">Weryfikacja sesji konta...</div>
       </div>
     )
   }
 
   return (
-    <main className="min-h-screen bg-zinc-900/60 text-white">
-      <div className="mx-auto max-w-4xl px-6 py-10">
+    <main className="min-h-screen text-zinc-100 relative overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-700 via-zinc-800 to-zinc-900">
+      
+      <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none hidden xl:block">
+        <div className="absolute -top-32 left-[calc(50%-45rem)] h-[35rem] w-[35rem] rounded-full bg-emerald-400/15 blur-[120px]" />
+        <div className="absolute top-1/4 right-[calc(50%-48rem)] h-[40rem] w-[40rem] rounded-full bg-cyan-400/15 blur-[120px]" />
+        <div className="absolute bottom-[-10rem] left-[calc(50%-40rem)] h-[35rem] w-[35rem] rounded-full bg-lime-400/10 blur-[120px]" />
+      </div>
+
+      <div className="absolute inset-0 -z-10 bg-zinc-950/40 backdrop-blur-[4px]" />
+
+      <div className="relative mx-auto max-w-4xl px-6 py-10">
         <div className="mb-10 flex items-center justify-between">
-          <button onClick={() => router.push('/dashboard')} className="cursor-pointer text-sm text-zinc-400 hover:text-white transition">
+          <button onClick={() => router.push('/dashboard')} className="cursor-pointer text-sm font-medium text-zinc-400 hover:text-white transition">
             &larr; Back to dashboard
           </button>
-          <button onClick={handleLogout} className="cursor-pointer rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-red-400 hover:bg-red-500/20 transition">
+          <button onClick={handleLogout} className="cursor-pointer rounded-xl border border-red-500 bg-red-950/20 px-4 py-2 text-sm font-bold text-red-400 hover:bg-red-950/60 transition shadow-md">
             Logout
           </button>
         </div>
 
-        <h1 className="mb-8 text-4xl font-black">Account</h1>
+        <h1 className="mb-8 text-4xl font-black text-zinc-100">Account</h1>
 
         {pageError && (
-          <div className="mb-6 rounded-xl bg-red-500/10 p-4 text-sm text-red-400 border border-red-500/20">
+          <div className="mb-6 rounded-2xl border-2 border-red-500 bg-red-950/90 backdrop-blur-[80px] p-4 text-sm text-red-200 font-semibold shadow-lg">
             {pageError}
           </div>
         )}
 
-        <div className="mb-10 rounded-2xl border border-white/10 bg-zinc-900/70 backdrop-blur-md p-6 shadow-lg shadow-black/30">
-          <h2 className="mb-4 text-xl font-bold">Account information</h2>
-          <p className="text-zinc-400 text-sm">Username</p>
-          <p className="mb-4 font-semibold">{user.username}</p>
-          <p className="text-zinc-400 text-sm">Role</p>
-          <p className="font-semibold text-green-400">{user.role || 'USER'}</p>
+        <div className="mb-10 rounded-2xl border border-zinc-500/30 bg-zinc-900/75 backdrop-blur-[80px] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.4)]">
+          <h2 className="mb-4 text-xl font-bold text-zinc-100">Account information</h2>
+          <p className="text-zinc-400 text-sm font-medium">Username</p>
+          <p className="mb-4 font-bold text-zinc-200">{user.username}</p>
+          <p className="text-zinc-400 text-sm font-medium">Role</p>
+          <p className="font-bold text-emerald-400">{user.role || 'USER'}</p>
         </div>
 
         <button
           onClick={() => setUploadOpen(true)}
-          className="w-full text-left mb-8 cursor-pointer rounded-2xl border border-green-500/20 bg-green-500/10 p-6 hover:bg-green-500/15 transition backdrop-blur-md outline-none focus:border-green-500/40"
+          className="w-full text-left mb-8 cursor-pointer rounded-2xl border border-emerald-500/30 bg-zinc-900/75 backdrop-blur-[80px] p-6 hover:border-emerald-500/50 hover:bg-zinc-900/90 transition shadow-[0_20px_50px_rgba(0,0,0,0.3)] outline-none"
         >
-          <div className="flex items-center gap-3">
-            <Upload className="h-6 w-6 text-green-400" />
+          <div className="flex items-center gap-4">
+            <Upload className="h-7 w-7 text-emerald-400" />
             <div>
-              <p className="text-lg font-bold">Upload file</p>
-              <p className="text-sm text-zinc-400">Add new file to your account</p>
+              <p className="text-lg font-bold text-zinc-100">Upload file</p>
+              <p className="text-sm text-zinc-400 font-medium">Add new file to your account</p>
             </div>
           </div>
         </button>
 
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/70 backdrop-blur-md divide-y divide-white/10 shadow-lg shadow-black/30 overflow-hidden">
-          <div className="p-4 bg-white/5 font-semibold text-sm text-zinc-300 px-6">My Files Inventory</div>
+        <div className="rounded-2xl border border-zinc-500/30 bg-zinc-900/75 backdrop-blur-[80px] divide-y divide-zinc-700/50 shadow-[0_20px_50px_rgba(0,0,0,0.4)] overflow-hidden">
+          <div className="p-4 bg-zinc-950/40 font-bold text-sm text-zinc-300 px-6">My Files Inventory</div>
           {myFiles.length === 0 ? (
-            <div className="p-6 text-zinc-400 text-sm">You haven't uploaded any files yet.</div>
+            <div className="p-6 text-zinc-400 text-sm font-medium">You haven't uploaded any files yet.</div>
           ) : (
             myFiles.map((f) => (
               <div
                 key={f.id}
-                className="flex items-center justify-between p-6"
+                className="flex items-center justify-between p-6 hover:bg-zinc-950/10 transition"
               >
                 <div>
-                  <p className="font-semibold text-zinc-100">{f.originalFilename}</p>
+                  <p className="font-bold text-zinc-100">{f.originalFilename}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     disabled={actionLoadingId !== null}
                     onClick={() => handleDownload(f)}
-                    className="cursor-pointer text-zinc-300 hover:text-white transition p-2 rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30"
+                    className="cursor-pointer text-zinc-300 hover:text-white transition p-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 disabled:opacity-30"
                   >
                     <Download className="h-4 w-4" />
                   </button>
                   <button
                     disabled={actionLoadingId !== null}
                     onClick={() => handleDeleteMyFile(f.id)}
-                    className="cursor-pointer text-red-400 hover:text-red-300 transition p-2 rounded hover:bg-red-500/10 disabled:opacity-30"
+                    className="cursor-pointer text-red-400 hover:text-red-300 transition p-2 rounded-xl bg-red-950/20 border border-red-900/30 hover:bg-red-950/50 disabled:opacity-30"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -218,42 +247,44 @@ export default function AccountPage() {
       </div>
 
       {uploadOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-50" onClick={() => !loading && setUploadOpen(false)}>
-          <div className="w-[520px] rounded-2xl border border-white/10 bg-zinc-900/90 backdrop-blur-md p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Upload new file</h2>
-              <button disabled={loading} onClick={() => setUploadOpen(false)} className="text-zinc-400 hover:text-white"><X className="h-5 w-5" /></button>
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 p-4" onClick={() => !loading && setUploadOpen(false)}>
+          <div className="w-[520px] rounded-3xl border border-zinc-500/40 bg-zinc-900/90 backdrop-blur-[80px] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-xl font-bold text-zinc-100">Upload new file</h2>
+              <button disabled={loading} onClick={() => setUploadOpen(false)} className="text-zinc-400 hover:text-white transition"><X className="h-5 w-5" /></button>
             </div>
+            
             <div className="mb-5">
               <input id="fileInput" type="file" ref={fileInputRef} className="hidden" disabled={loading} onChange={handleFileChange} />
-              <label htmlFor="fileInput" className="cursor-pointer flex flex-col items-center justify-center rounded-xl border border-dashed border-white/20 bg-black/40 p-6 hover:bg-white/5 transition border-zinc-700 hover:border-green-500/40">
-                <FileUp className="mb-2 h-8 w-8 text-green-400" />
-                <p className="font-semibold">{uploadFile ? 'Change file' : 'Choose a file'}</p>
+              <label htmlFor="fileInput" className="cursor-pointer flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-950/40 p-6 hover:bg-zinc-950/80 hover:border-emerald-500/50 transition">
+                <FileUp className="mb-2 h-8 w-8 text-emerald-400" />
+                <p className="font-bold text-sm text-zinc-200">{uploadFile ? 'Change file' : 'Choose a file'}</p>
               </label>
-              {uploadFile && <p className="mt-2 text-sm text-green-400 text-center">Selected: {uploadFile.name}</p>}
+              {uploadFile && <p className="mt-2 text-sm text-emerald-400 font-bold text-center">Selected: {uploadFile.name}</p>}
             </div>
             
             <div className="mb-4">
-              <label className="flex items-center gap-2 text-sm cursor-pointer text-zinc-300">
-                <input type="checkbox" disabled={accessLevel === 'public'} checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="accent-green-500" />
+              <label className="flex items-center gap-2 text-sm cursor-pointer text-zinc-300 font-medium select-none">
+                <input type="checkbox" disabled={accessLevel === 'public'} checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="accent-emerald-500 h-4 w-4 rounded" />
                 Allow others to view
               </label>
             </div>
 
             <div className="mb-6 space-y-2">
-              <p className="text-sm text-zinc-400">Access Policy:</p>
+              <p className="text-sm text-zinc-400 font-bold">Access Policy:</p>
               {[
                 { value: 'public', title: 'Public', desc: 'Anyone can view' },
                 { value: 'request', title: 'Private', desc: 'Specify who can view or dont allow anyone to view.' }
               ].map((opt) => (
-                <label key={opt.value} className={`cursor-pointer block rounded-xl border p-3 ${accessLevel === opt.value ? 'border-green-500/40 bg-green-500/10' : 'border-white/10 bg-black/20'}`}>
+                <label key={opt.value} className={`cursor-pointer block rounded-xl border p-3 transition ${accessLevel === opt.value ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-zinc-700 bg-zinc-950/30 hover:bg-zinc-950/60'}`}>
                   <input type="radio" className="hidden" checked={accessLevel === opt.value} onChange={() => handleAccessLevelChange(opt.value as AccessLevel)} />
-                  <p className="font-semibold text-sm">{opt.title}</p>
-                  <p className="text-xs text-zinc-400">{opt.desc}</p>
+                  <p className="font-bold text-sm text-zinc-200">{opt.title}</p>
+                  <p className="text-xs text-zinc-400 mt-0.5 font-medium">{opt.desc}</p>
                 </label>
               ))}
             </div>
-            <button disabled={loading || !uploadFile} onClick={handleUploadConfirm} className="w-full rounded-xl bg-green-500 py-2.5 text-black font-semibold hover:bg-green-400 transition text-sm">
+            
+            <button disabled={loading || !uploadFile} onClick={handleUploadConfirm} className="w-full rounded-xl bg-emerald-500 py-3 text-black font-bold hover:bg-emerald-400 transition text-sm shadow-[0_10px_20px_rgba(16,185,129,0.2)]">
               {loading ? 'Uploading...' : 'Confirm'}
             </button>
           </div>
